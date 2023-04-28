@@ -1,12 +1,13 @@
 package chains
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tmc/langchaingo/exp/prompts"
 	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/tmc/langchaingo/prompts"
 	"github.com/tmc/langchaingo/schema"
 )
 
@@ -37,6 +38,6 @@ func TestStuffDocumentsChain(t *testing.T) {
 		"input_documents": docs,
 	}
 
-	_, err = Call(chain, inputValues)
+	_, err = Call(context.Background(), chain, inputValues)
 	require.NoError(t, err)
 }

@@ -1,10 +1,10 @@
 package chains
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/tmc/langchaingo/exp/memory"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/memory"
 	"github.com/tmc/langchaingo/schema"
 )
 
@@ -16,6 +16,7 @@ type RetrievalQAChain struct {
 	ReturnSourceDocuments bool
 }
 
+/*
 func NewRetrievalQAChainFromLLM(llm llms.LLM, retriever schema.Retriever) RetrievalQAChain {
 	qaChain := loadQAStuffChain(llm)
 	return RetrievalQAChain{
@@ -26,8 +27,9 @@ func NewRetrievalQAChainFromLLM(llm llms.LLM, retriever schema.Retriever) Retrie
 		ReturnSourceDocuments: false,
 	}
 }
+*/
 
-func (c RetrievalQAChain) Call(values map[string]any) (map[string]any, error) {
+func (c RetrievalQAChain) Call(ctx context.Context, values map[string]any) (map[string]any, error) {
 	queryAny, ok := values[c.InputKey]
 	if !ok {
 		return nil, fmt.Errorf("Input key %s not found", c.InputKey)
@@ -48,7 +50,7 @@ func (c RetrievalQAChain) Call(values map[string]any) (map[string]any, error) {
 		"input_documents": docs,
 	}
 
-	result, err := Call(c.combineDocumentChain, inputs)
+	result, err := Call(ctx, c.combineDocumentChain, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -61,5 +63,5 @@ func (c RetrievalQAChain) Call(values map[string]any) (map[string]any, error) {
 }
 
 func (c RetrievalQAChain) GetMemory() schema.Memory {
-	return memory.NewEmpty()
+	return memory.NewSimple()
 }

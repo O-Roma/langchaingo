@@ -1,8 +1,11 @@
 package mrkl
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tmc/langchaingo/exp/agent/executor"
 	"github.com/tmc/langchaingo/exp/chains"
@@ -44,15 +47,13 @@ func checkOptions(opts OneShotZeroAgentOptions) OneShotZeroAgentOptions {
 // and options. It returns a pointer to the created agent and an error if there is any
 // issue during the creation process.
 func NewOneShotAgent(llm llms.LLM, tools []tools.Tool, opts map[string]any) (*OneShotZeroAgent, error) {
-	firtPrompt, err := createPrompt(tools)
-	if err != nil {
-		return nil, err
-	}
+	// Validate opts
 	opts = checkOptions(opts)
+
 	return &OneShotZeroAgent{
 		llm:        llm,
 		query:      "",
-		chain:      chains.NewLLMChain(llm, firtPrompt),
+		chain:      chains.NewLLMChain(llm, createPrompt()),
 		tools:      tools,
 		verbose:    opts["verbose"].(bool),
 		maxRetries: opts["maxRetries"].(int),
@@ -62,33 +63,44 @@ func NewOneShotAgent(llm llms.LLM, tools []tools.Tool, opts map[string]any) (*On
 // Run is an implementation of the AgentExecutor interface. It takes a query as input
 // and executes it, returning an AgentFinish object containing the result, or an error
 // if the execution fails.
-func (a *OneShotZeroAgent) Run(query string) (*schema.AgentFinish, error) {
+func (a *OneShotZeroAgent) Run(ctx context.Context, query string) (*schema.AgentFinish, error) {
 	var attempts int
 	a.query = query
-	resp, _ := a.chain.Call(map[string]interface{}{
-		"input":            a.query,
-		"agent_scratchpad": "",
-		"stop":             []string{"\nObservation:", "\n\tObservation:"},
+
+	// Call the chain
+	resp, _ := a.chain.Call(ctx, map[string]interface{}{
+		"today":             time.Now().Format("January 02, 2006"),
+		"tool_names":        toolNames(a.tools),
+		"tool_descriptions": toolDescriptions(a.tools),
+		"input":             a.query,
+		"agent_scratchpad":  "",
+		"stop":              []string{"\nObservation:", "\n\tObservation:"},
 	})
 
-	output := resp["text"].(string)
+	// Validate the response
+	output, ok := resp["text"].(string)
+	if !ok {
+		return nil, errors.New("Agent did not return a string")
+	}
+
 	for output != "" || attempts < a.maxRetries {
 		var err error
 		action, finish := a.plan(output)
 		if finish != nil {
 			return finish, nil
 		}
-		output, err = a.nextStep(*action)
+		output, err = a.nextStep(ctx, *action)
 		if err != nil {
 			return nil, err
 		}
 
 		attempts++
 	}
+
 	return nil, fmt.Errorf("Agent did not finish after %d attempts", attempts)
 }
 
-func (a *OneShotZeroAgent) nextStep(action schema.AgentAction) (string, error) {
+func (a *OneShotZeroAgent) nextStep(ctx context.Context, action schema.AgentAction) (string, error) {
 	var scratchpad []string
 	// Perform your desired operation with the text value
 	observation, err := runTool(action.Tool, action.ToolInput.(string), &a.tools)
@@ -101,7 +113,7 @@ func (a *OneShotZeroAgent) nextStep(action schema.AgentAction) (string, error) {
 	}
 
 	// Update resp using a.chain.Call()
-	newResp, err := a.chain.Call(map[string]interface{}{
+	newResp, err := a.chain.Call(ctx, map[string]interface{}{
 		"input":            a.query,
 		"agent_scratchpad": strings.Join(scratchpad, "\n"),
 		"stop":             []string{"\nObservation:", "\n\tObservation:"},
@@ -167,16 +179,28 @@ func getAgentAction(input string) schema.AgentAction {
 }
 
 func runTool(action string, actionInput string, tools *[]tools.Tool) (string, error) {
+	// Sanitize the action
+	action = strings.ToLower(strings.Trim(action, " "))
+
+	// Sanitize the action input
+	actionInput = strings.TrimSpace(actionInput)
+
+	// Find the tool that matches the action
 	var observation string
 	for _, tool := range *tools {
+		if tool.Name != strings.Trim(action, " ") {
+			continue
+		}
+
+		// Run the tool
 		toolOutput, err := tool.Run(actionInput)
 		if err != nil {
 			return "", err
 		}
-		if tool.Name == strings.Trim(action, " ") {
-			observation = "\nObservation: " + toolOutput + "\n"
-			break
-		}
+
+		// Add the tool's output to the observation
+		observation = "\nObservation: " + toolOutput + "\n"
+		break
 	}
 	return observation, nil
 }

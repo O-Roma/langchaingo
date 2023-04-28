@@ -2,7 +2,7 @@ package memory
 
 import "github.com/tmc/langchaingo/schema"
 
-// ChatMessageHistory stores chat messages
+// ChatMessageHistory is a struct that stores chat messages.
 type ChatMessageHistory struct {
 	messages []schema.ChatMessage
 }
@@ -20,7 +20,7 @@ func NewChatMessageHistory(options ...NewChatMessageOption) *ChatMessageHistory 
 	return h
 }
 
-// Messages is a function that returns all messages stored.
+// Messages returns all messages stored.
 func (h *ChatMessageHistory) Messages() []schema.ChatMessage {
 	return h.messages
 }
@@ -33,6 +33,10 @@ func (h *ChatMessageHistory) AddAIMessage(text string) {
 // AddUserMessage adds an user to the chat message history.
 func (h *ChatMessageHistory) AddUserMessage(text string) {
 	h.messages = append(h.messages, schema.HumanChatMessage{Text: text})
+}
+
+func (h *ChatMessageHistory) Clear() {
+	h.messages = make([]schema.ChatMessage, 0)
 }
 
 // NewChatMessageOption is a function for creating new chat message history

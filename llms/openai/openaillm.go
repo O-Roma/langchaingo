@@ -9,7 +9,10 @@ import (
 	"github.com/tmc/langchaingo/llms/openai/internal/openaiclient"
 )
 
-const tokenEnvVarName = "OPENAI_API_KEY" //nolint:gosec
+const (
+	tokenEnvVarName = "OPENAI_API_KEY" //nolint:gosec
+	modelEnvVarName = "OPENAI_MODEL"   //nolint:gosec
+)
 
 var (
 	ErrEmptyResponse = errors.New("no response")
@@ -24,8 +27,9 @@ type LLM struct {
 
 var _ llms.LLM = (*LLM)(nil)
 
-func (o *LLM) Call(prompt string, stopWords []string) (string, error) {
-	r, err := o.Generate([]string{prompt}, stopWords)
+// Call requests a completion for the given prompt.
+func (o *LLM) Call(ctx context.Context, prompt string, stopWords []string) (string, error) {
+	r, err := o.Generate(ctx, []string{prompt}, stopWords)
 	if err != nil {
 		return "", err
 	}
@@ -35,8 +39,8 @@ func (o *LLM) Call(prompt string, stopWords []string) (string, error) {
 	return r[0].Text, nil
 }
 
-func (o *LLM) Generate(prompts []string, stopWords []string) ([]*llms.Generation, error) {
-	result, err := o.client.CreateCompletion(context.TODO(), &openaiclient.CompletionRequest{
+func (o *LLM) Generate(ctx context.Context, prompts []string, stopWords []string) ([]*llms.Generation, error) {
+	result, err := o.client.CreateCompletion(ctx, &openaiclient.CompletionRequest{
 		Prompt:    prompts[0],
 		StopWords: stopWords,
 	})
@@ -46,6 +50,16 @@ func (o *LLM) Generate(prompts []string, stopWords []string) ([]*llms.Generation
 	return []*llms.Generation{
 		{Text: result.Text},
 	}, nil
+}
+
+// Chat requests a chat response for the given prompt.
+func (o *LLM) Chat(prompt string) (string, error) {
+	result, err := o.client.CreateChat(context.TODO(), &openaiclient.ChatRequest{Prompt: prompt})
+	if err != nil {
+		return "", err
+	}
+
+	return result.Text, nil
 }
 
 // CreateEmbedding creates an embedding for the given input text.
@@ -69,12 +83,19 @@ func (o *LLM) CreateEmbedding(inputTexts []string) ([][]float64, error) {
 	return embeddings, nil
 }
 
+// New returns a new OpenAI client.
 func New() (*LLM, error) {
+	// Require the OpenAI API key to be set.
 	token := os.Getenv(tokenEnvVarName)
 	if token == "" {
 		return nil, ErrMissingToken
 	}
-	c, err := openaiclient.New(token)
+
+	// Allow model selection.
+	model := os.Getenv(modelEnvVarName)
+
+	// Create the client.
+	c, err := openaiclient.New(token, model)
 	return &LLM{
 		client: c,
 	}, err

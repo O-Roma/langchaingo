@@ -1,11 +1,11 @@
 package chains
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/tmc/langchaingo/exp/memory"
-	"github.com/tmc/langchaingo/exp/prompts"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/memory"
+	"github.com/tmc/langchaingo/prompts"
 	"github.com/tmc/langchaingo/schema"
 )
 
@@ -25,7 +25,7 @@ func NewStuffDocumentsChain(llmChain LLMChain) StuffDocumentsChain {
 	}
 }
 
-func (c StuffDocumentsChain) Call(values map[string]any) (map[string]any, error) {
+func (c StuffDocumentsChain) Call(ctx context.Context, values map[string]any) (map[string]any, error) {
 	docsAny, ok := values[c.InputKey]
 	if !ok {
 		return nil, fmt.Errorf("Document key %s not found", c.InputKey)
@@ -47,19 +47,20 @@ func (c StuffDocumentsChain) Call(values map[string]any) (map[string]any, error)
 	}
 
 	inputValues[c.DocumentVariableName] = text
-	return Call(c.llmChain, inputValues)
+	return Call(ctx, c.llmChain, inputValues)
 }
 
 func (c StuffDocumentsChain) GetMemory() schema.Memory {
-	return memory.NewEmpty()
+	return memory.NewSimple()
 }
 
-var DefaultQAPrompt, _ = prompts.NewPromptTemplate(
-	"Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.\n\n{context}\n\nQuestion: {question}\nHelpful Answer:",
-	[]string{"context", "question"},
-)
+var DefaultQAPrompt = prompts.PromptTemplate{
+	Template:       "Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.\n\n{context}\n\nQuestion: {question}\nHelpful Answer:",
+	InputVariables: []string{"context", "question"},
+}
 
 // TODO: add conditional after chat model is added.
+/*
 var QAPromptSelector = prompts.NewConditionalPromptSelector(DefaultQAPrompt, []prompts.Conditional{})
 
 func loadQAStuffChain(llm llms.LLM) StuffDocumentsChain {
@@ -67,3 +68,4 @@ func loadQAStuffChain(llm llms.LLM) StuffDocumentsChain {
 	llmChain := NewLLMChain(llm, prompt)
 	return NewStuffDocumentsChain(llmChain)
 }
+*/
